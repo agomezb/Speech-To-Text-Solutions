@@ -1,13 +1,13 @@
 """
-Azure Speech-to-Text Solution
-Reads audio files from a directory and transcribes them using Azure Cognitive Services.
+Speech-to-Text Solution
+Reads audio files from a directory and transcribes them using cloud speech services.
 Results are saved to a CSV file.
 """
 
 import os
 import typer
 from dotenv import load_dotenv
-from azure_speech import ProviderFactory
+from providers import ProviderFactory
 
 # Load environment variables from .env file
 load_dotenv()

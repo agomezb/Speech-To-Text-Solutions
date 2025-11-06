@@ -5,7 +5,7 @@ Creates speech-to-text provider instances based on the provider name.
 
 from typing import Optional
 from .base_provider import SpeechToTextProvider
-from .speech_to_text import AzureSpeechToText
+from .azure_provider import AzureSpeechToText
 
 
 class ProviderFactory:
