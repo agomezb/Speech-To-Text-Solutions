@@ -1,15 +1,15 @@
 """
 Azure Speech-to-Text Service
-Handles speech-to-text transcription using Azure Cognitive Services.
+Handles speech-to-text transcription using Azure AI Services.
 """
 
 import os
-import csv
-from pathlib import Path
-from typing import List, Dict, Optional
+from typing import Dict, Optional
 import azure.cognitiveservices.speech as speechsdk
+from .base_provider import SpeechToTextProvider
 
-class AzureSpeechToText:
+
+class AzureSpeechToText(SpeechToTextProvider):
     """Handles speech-to-text transcription using Azure Cognitive Services."""
     
     def __init__(
@@ -115,60 +115,3 @@ class AzureSpeechToText:
                 "text": "",
                 "status": f"exception: {str(e)}"
             }
-    
-    def transcribe_directory(
-        self,
-        audio_dir: str,
-        output_csv: str,
-        supported_extensions: tuple = ('.wav', '.mp3', '.ogg', '.flac')
-    ) -> None:
-        """
-        Transcribe all audio files in a directory and save to CSV.
-        
-        Args:
-            audio_dir: Directory containing audio files
-            output_csv: Output CSV file path
-            supported_extensions: Tuple of supported audio file extensions
-        """
-        audio_dir_path = Path(audio_dir)
-        
-        if not audio_dir_path.exists():
-            raise ValueError(f"Directory not found: {audio_dir}")
-        
-        # Find all audio files
-        audio_files = [
-            str(f) for f in audio_dir_path.iterdir()
-            if f.is_file() and f.suffix.lower() in supported_extensions
-        ]
-        
-        if not audio_files:
-            print(f"No audio files found in {audio_dir}")
-            return
-        
-        print(f"Found {len(audio_files)} audio files")
-        
-        # Transcribe all files
-        results = []
-        for audio_file in sorted(audio_files):
-            result = self.transcribe_file(audio_file)
-            results.append(result)
-        
-        # Save to CSV
-        self._save_to_csv(results, output_csv)
-        print(f"\nResults saved to: {output_csv}")
-    
-    def _save_to_csv(self, results: List[Dict[str, str]], output_file: str) -> None:
-        """
-        Save transcription results to CSV.
-        
-        Args:
-            results: List of transcription results
-            output_file: Output CSV file path
-        """
-        with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['filename', 'text', 'status']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-            
-            writer.writeheader()
-            for result in results:
-                writer.writerow(result)
