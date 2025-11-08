@@ -4,13 +4,9 @@ Reads audio files from a directory and transcribes them using cloud speech servi
 Results are saved to a CSV file.
 """
 
-import os
 import typer
-from dotenv import load_dotenv
 from providers import ProviderFactory
-
-# Load environment variables from .env file
-load_dotenv()
+from config import ProviderConfig, AzureConfig, AmazonConfig, GoogleConfig
 
 app = typer.Typer()
 
@@ -45,35 +41,69 @@ def main(
     """
     Transcribe audio files to text using cloud speech services.
     
-    Currently supported providers: azure (amazon and google coming soon)
+    Supported providers:
+    - azure: Requires AZURE_SPEECH_KEY and AZURE_SPEECH_REGION
+    - amazon: Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+    - google: Coming soon
     """
-    # Load from environment variables or use defaults
-    AZURE_SPEECH_KEY = os.getenv('AZURE_SPEECH_KEY')
-    AZURE_SPEECH_REGION = os.getenv('AZURE_SPEECH_REGION', 'eastus')
-    AZURE_SPEECH_LANGUAGE = language or os.getenv('AZURE_SPEECH_LANGUAGE', 'en-US')
-    AZURE_SPEECH_ENDPOINT = os.getenv('AZURE_SPEECH_ENDPOINT')
+    provider = provider.lower()
     
-    if not AZURE_SPEECH_KEY:
+    # Get common settings
+    common_settings = ProviderConfig.get_common_settings(language)
+    audio_directory = audio_dir or common_settings['audio_dir']
+    output_file = output_csv or common_settings['output_csv']
+    lang = common_settings['language']
+    
+    # Validate provider configuration
+    if provider == "azure":
+        is_valid, error_msg = AzureConfig.validate()
+        if not is_valid:
+            typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
+            raise typer.Exit(1)
+        config = AzureConfig.from_env()
+        
+    elif provider == "amazon":
+        is_valid, error_msg = AmazonConfig.validate()
+        if not is_valid:
+            typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
+            raise typer.Exit(1)
+        config = AmazonConfig.from_env()
+        
+    elif provider == "google":
+        is_valid, error_msg = GoogleConfig.validate()
+        if not is_valid:
+            typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
+            raise typer.Exit(1)
+        config = GoogleConfig.from_env()
+        
+    else:
         typer.secho(
-            "Error: AZURE_SPEECH_KEY not set in .env file",
+            f"Error: Unknown provider '{provider}'. Use: azure, amazon, or google",
             fg=typer.colors.RED,
             bold=True
         )
         raise typer.Exit(1)
     
-    # Paths
-    audio_directory = audio_dir or os.getenv('AUDIO_DIR', './audio')
-    output_file = output_csv or os.getenv('OUTPUT_CSV', './transcriptions.csv')
-    
     try:
         # Create provider instance using factory
-        stt = ProviderFactory.create_provider(
-            provider=provider,
-            subscription_key=AZURE_SPEECH_KEY,
-            region=AZURE_SPEECH_REGION,
-            language=AZURE_SPEECH_LANGUAGE,
-            endpoint=AZURE_SPEECH_ENDPOINT
-        )
+        if provider == "azure":
+            stt = ProviderFactory.create_provider(
+                provider=provider,
+                subscription_key=config['subscription_key'],
+                region=config['region'],
+                language=lang,
+                endpoint=config['endpoint']
+            )
+        elif provider == "amazon":
+            stt = ProviderFactory.create_provider(
+                provider=provider,
+                aws_access_key_id=config['aws_access_key_id'],
+                aws_secret_access_key=config['aws_secret_access_key'],
+                region=config['region'],
+                language=lang
+            )
+        else:
+            raise ValueError(f"Unknown provider: {provider}")
         
         typer.secho(
             f"Using provider: {provider.upper()}",

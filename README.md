@@ -1,6 +1,6 @@
-# Azure Speech-to-Text Solution
+# Speech-to-Text Solution
 
-Simple solution to transcribe audio files using Azure Cognitive Services.
+Simple solution to transcribe audio files using cloud speech services (Azure, Amazon, Google).
 
 ## Setup
 
@@ -9,38 +9,66 @@ Simple solution to transcribe audio files using Azure Cognitive Services.
 pip install -r requirements.txt
 ```
 
-2. Set your Azure credentials:
-```bash
-export AZURE_SPEECH_KEY='your-azure-speech-key'
-export AZURE_SPEECH_REGION='your-region'  # e.g., eastus, westeurope
-export AZURE_SPEECH_LANGUAGE='en-US'  # Optional, default: en-US
-export AZURE_SPEECH_ENDPOINT='https://...'  # Optional, for custom models/endpoints
-```
-
-> **Note**: The `AZURE_SPEECH_ENDPOINT` is only needed if you're using:
-> - Custom Speech models (custom endpoints)
-> - Speech containers
-> - Custom domains with AAD authentication
-> 
-> For standard Azure Speech Service, just use `AZURE_SPEECH_KEY` and `AZURE_SPEECH_REGION`.
+2. Configure environment variables:
+   - Copy `.env.example` to `.env`
+   - Edit `.env` and set your credentials:
+   
+   **For Azure:**
+   ```bash
+   AZURE_SPEECH_KEY=your-azure-speech-key
+   AZURE_SPEECH_REGION=southcentralus
+   AZURE_SPEECH_LANGUAGE=es-ES
+   ```
+   
+   **For Amazon:**
+   ```bash
+   AWS_ACCESS_KEY_ID=your-aws-access-key-id
+   AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
+   AWS_REGION=us-east-1
+   AZURE_SPEECH_LANGUAGE=en-US
+   ```
 
 ## Usage
 
-### Basic usage (using default paths):
+### Basic usage (uses .env configuration with Azure):
 ```bash
-python speech-text-azure.py
+python speech-text.py
 ```
 
-By default, it will:
-- Look for audio files in `./audio` directory
-- Save results to `./transcriptions.csv`
-
-### Custom paths:
+### With command-line options:
 ```bash
-export AUDIO_DIR='/path/to/your/audio/files'
-export OUTPUT_CSV='/path/to/output.csv'
-python speech-text-azure.py
+# Specify audio directory
+python speech-text.py --audio-dir /path/to/audio
+
+# Specify output file
+python speech-text.py --output results.csv
+
+# Change language
+python speech-text.py --language es-ES
+
+# Choose provider (Azure or Amazon)
+python speech-text.py --provider azure
+python speech-text.py --provider amazon
+
+# Combine options
+python speech-text.py -a ./recordings -o output.csv -l en-US -p azure
 ```
+
+### Get help:
+```bash
+python speech-text.py --help
+```
+
+### Supported Providers:
+- **Azure** ✅ - Fully supported
+- **Amazon** ✅ - Fully supported
+- **Google** 🔜 - Coming soon
+
+The script will:
+- Load configuration from `.env` file (can be overridden with CLI options)
+- Use the specified provider (default: Azure)
+- Look for audio files in the specified directory
+- Save transcription results to CSV file
 
 ### Supported audio formats:
 - .wav
@@ -55,8 +83,35 @@ The script generates a CSV file with three columns:
 - `text`: Transcribed text
 - `status`: Status of the transcription (success, error, etc.)
 
-## Getting Azure Credentials
+## Getting Credentials
 
+### Azure
 1. Go to [Azure Portal](https://portal.azure.com)
 2. Create a Speech service resource
 3. Copy the Key and Region from the resource
+
+### Amazon
+1. Go to [AWS Console](https://console.aws.amazon.com/)
+2. Create an IAM user with Transcribe and S3 permissions
+3. Generate access keys
+4. Copy Access Key ID and Secret Access Key
+
+## Architecture
+
+The solution follows SOLID principles with a simple, extensible architecture:
+
+```
+providers/
+├── base_provider.py      # Abstract base class (interface)
+├── azure_provider.py     # Azure implementation
+├── amazon_provider.py    # Amazon implementation
+├── provider_factory.py   # Factory pattern for provider creation
+└── __init__.py
+```
+
+- **SpeechToTextProvider**: Abstract base class defining the interface
+- **AzureSpeechToText**: Concrete implementation for Azure
+- **AmazonTranscribe**: Concrete implementation for Amazon
+- **ProviderFactory**: Factory to create provider instances
+
+This design makes it easy to add new providers (Google) without modifying existing code.
