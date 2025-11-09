@@ -3,7 +3,7 @@ Provider Factory
 Creates speech-to-text provider instances based on the provider name.
 """
 
-from typing import Optional
+from typing import Dict, Any
 from .base_provider import SpeechToTextProvider
 from .azure_provider import AzureSpeechToText
 from .amazon_provider import AmazonTranscribe
@@ -17,74 +17,58 @@ class ProviderFactory:
     @staticmethod
     def create_provider(
         provider: str,
-        subscription_key: str = None,
-        region: str = None,
-        language: str = "en-US",
-        endpoint: Optional[str] = None,
-        aws_access_key_id: str = None,
-        aws_secret_access_key: str = None,
-        custom_service_uri: str = None,
-        project_id: str = None,
-        location: str = "global",
-        credentials_file: str = None
+        config: Dict[str, Any],
+        language: str = "en-US"
     ) -> SpeechToTextProvider:
         """
         Create a speech-to-text provider instance.
         
         Args:
             provider: Provider name ('azure', 'amazon', 'google', 'custom_service')
-            subscription_key: API/subscription key (Azure)
-            region: Service region
-            language: Recognition language
-            endpoint: Optional custom endpoint (Azure)
-            aws_access_key_id: AWS access key (Amazon)
-            aws_secret_access_key: AWS secret key (Amazon)
-            custom_service_uri: URI for custom service (Custom Service)
-            project_id: Google Cloud project ID (Google)
-            location: Google Cloud location (Google, default: "global")
-            credentials_file: Path to Google service account JSON file (Google, optional)
+            config: Configuration dictionary from provider config class
+            language: Recognition language (default: 'en-US')
             
         Returns:
             SpeechToTextProvider instance
             
         Raises:
-            ValueError: If provider is not supported
+            ValueError: If provider is not supported or required config is missing
         """
         provider = provider.lower()
         
         if provider == "azure":
-            if not subscription_key:
+            if not config.get('subscription_key'):
                 raise ValueError("subscription_key is required for Azure provider")
             return AzureSpeechToText(
-                subscription_key=subscription_key,
-                region=region or "eastus",
+                subscription_key=config['subscription_key'],
+                region=config.get('region', 'eastus'),
                 language=language,
-                endpoint=endpoint
+                endpoint=config.get('endpoint')
             )
         elif provider == "amazon":
-            if not aws_access_key_id or not aws_secret_access_key:
+            if not config.get('aws_access_key_id') or not config.get('aws_secret_access_key'):
                 raise ValueError("aws_access_key_id and aws_secret_access_key are required for Amazon provider")
             return AmazonTranscribe(
-                aws_access_key_id=aws_access_key_id,
-                aws_secret_access_key=aws_secret_access_key,
-                region=region or "us-east-1",
+                aws_access_key_id=config['aws_access_key_id'],
+                aws_secret_access_key=config['aws_secret_access_key'],
+                region=config.get('region', 'us-east-1'),
                 language=language
             )
         elif provider == "custom_service":
-            if not custom_service_uri:
-                raise ValueError("custom_service_uri is required for Custom Service provider")
+            if not config.get('service_uri'):
+                raise ValueError("service_uri is required for Custom Service provider")
             return CustomServiceProvider(
-                service_uri=custom_service_uri,
+                service_uri=config['service_uri'],
                 language=language
             )
         elif provider == "google":
-            if not project_id:
+            if not config.get('project_id'):
                 raise ValueError("project_id is required for Google provider")
             return GoogleSpeechToText(
-                project_id=project_id,
-                location=location,
+                project_id=config['project_id'],
+                location=config.get('location', 'global'),
                 language=language,
-                credentials_file=credentials_file
+                credentials_file=config.get('credentials_file')
             )
         else:
             raise ValueError(

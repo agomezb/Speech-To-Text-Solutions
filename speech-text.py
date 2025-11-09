@@ -55,36 +55,15 @@ def main(
     output_file = output_csv or common_settings['output_csv']
     lang = common_settings['language']
     
-    # Validate provider configuration
-    if provider == "azure":
-        is_valid, error_msg = AzureConfig.validate()
-        if not is_valid:
-            typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
-            raise typer.Exit(1)
-        config = AzureConfig.from_env()
-        
-    elif provider == "amazon":
-        is_valid, error_msg = AmazonConfig.validate()
-        if not is_valid:
-            typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
-            raise typer.Exit(1)
-        config = AmazonConfig.from_env()
-        
-    elif provider == "google":
-        is_valid, error_msg = GoogleConfig.validate()
-        if not is_valid:
-            typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
-            raise typer.Exit(1)
-        config = GoogleConfig.from_env()
+    # Validate and get provider configuration
+    config_classes = {
+        "azure": AzureConfig,
+        "amazon": AmazonConfig,
+        "google": GoogleConfig,
+        "custom_service": CustomServiceConfig
+    }
     
-    elif provider == "custom_service":
-        is_valid, error_msg = CustomServiceConfig.validate()
-        if not is_valid:
-            typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
-            raise typer.Exit(1)
-        config = CustomServiceConfig.from_env()
-        
-    else:
+    if provider not in config_classes:
         typer.secho(
             f"Error: Unknown provider '{provider}'. Use: azure, amazon, google, or custom_service",
             fg=typer.colors.RED,
@@ -92,39 +71,23 @@ def main(
         )
         raise typer.Exit(1)
     
+    # Validate provider configuration
+    config_class = config_classes[provider]
+    is_valid, error_msg = config_class.validate()
+    if not is_valid:
+        typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
+        raise typer.Exit(1)
+    
+    # Get configuration
+    config = config_class.from_env()
+    
     try:
         # Create provider instance using factory
-        if provider == "azure":
-            stt = ProviderFactory.create_provider(
-                provider=provider,
-                subscription_key=config['subscription_key'],
-                region=config['region'],
-                language=lang,
-                endpoint=config['endpoint']
-            )
-        elif provider == "amazon":
-            stt = ProviderFactory.create_provider(
-                provider=provider,
-                aws_access_key_id=config['aws_access_key_id'],
-                aws_secret_access_key=config['aws_secret_access_key'],
-                region=config['region'],
-                language=lang
-            )
-        elif provider == "custom_service":
-            stt = ProviderFactory.create_provider(
-                provider=provider,
-                custom_service_uri=config['service_uri']
-            )
-        elif provider == "google":
-            stt = ProviderFactory.create_provider(
-                provider=provider,
-                project_id=config['project_id'],
-                location=config['location'],
-                language=lang,
-                credentials_file=config['credentials_file']
-            )
-        else:
-            raise ValueError(f"Unknown provider: {provider}")
+        stt = ProviderFactory.create_provider(
+            provider=provider,
+            config=config,
+            language=lang
+        )
         
         typer.secho(
             f"Using provider: {provider.upper()}",
