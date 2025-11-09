@@ -6,7 +6,7 @@ Results are saved to a CSV file.
 
 import typer
 from providers import ProviderFactory
-from config import ProviderConfig, AzureConfig, AmazonConfig, GoogleConfig
+from config import ProviderConfig, AzureConfig, AmazonConfig, GoogleConfig, CustomServiceConfig
 
 app = typer.Typer()
 
@@ -35,7 +35,7 @@ def main(
         "azure",
         "--provider",
         "-p",
-        help="Speech-to-text provider (azure, amazon, google)"
+        help="Speech-to-text provider (azure, amazon, google, custom_service)"
     )
 ):
     """
@@ -44,6 +44,7 @@ def main(
     Supported providers:
     - azure: Requires AZURE_SPEECH_KEY and AZURE_SPEECH_REGION
     - amazon: Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+    - custom_service: Requires CUSTOM_SERVICE_URI (default: http://0.0.0.0:8000)
     - google: Coming soon
     """
     provider = provider.lower()
@@ -75,10 +76,17 @@ def main(
             typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
             raise typer.Exit(1)
         config = GoogleConfig.from_env()
+    
+    elif provider == "custom_service":
+        is_valid, error_msg = CustomServiceConfig.validate()
+        if not is_valid:
+            typer.secho(f"Error: {error_msg}", fg=typer.colors.RED, bold=True)
+            raise typer.Exit(1)
+        config = CustomServiceConfig.from_env()
         
     else:
         typer.secho(
-            f"Error: Unknown provider '{provider}'. Use: azure, amazon, or google",
+            f"Error: Unknown provider '{provider}'. Use: azure, amazon, custom_service, or google",
             fg=typer.colors.RED,
             bold=True
         )
@@ -101,6 +109,11 @@ def main(
                 aws_secret_access_key=config['aws_secret_access_key'],
                 region=config['region'],
                 language=lang
+            )
+        elif provider == "custom_service":
+            stt = ProviderFactory.create_provider(
+                provider=provider,
+                custom_service_uri=config['service_uri']
             )
         else:
             raise ValueError(f"Unknown provider: {provider}")

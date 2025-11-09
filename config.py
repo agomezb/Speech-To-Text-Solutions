@@ -81,3 +81,22 @@ class GoogleConfig:
     def validate() -> tuple[bool, Optional[str]]:
         """Validate Google configuration."""
         return False, "Google provider is not yet implemented"
+
+
+class CustomServiceConfig:
+    """Custom Service configuration."""
+    
+    @staticmethod
+    def from_env() -> Dict[str, Optional[str]]:
+        """Load Custom Service configuration from environment variables."""
+        return {
+            'service_uri': os.getenv('CUSTOM_SERVICE_URI', 'http://0.0.0.0:8000')
+        }
+    
+    @staticmethod
+    def validate() -> tuple[bool, Optional[str]]:
+        """Validate Custom Service configuration."""
+        config = CustomServiceConfig.from_env()
+        if not config['service_uri']:
+            return False, "CUSTOM_SERVICE_URI not set in .env file"
+        return True, None
