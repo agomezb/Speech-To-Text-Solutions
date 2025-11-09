@@ -25,7 +25,12 @@ pip install -r requirements.txt
    AWS_ACCESS_KEY_ID=your-aws-access-key-id
    AWS_SECRET_ACCESS_KEY=your-aws-secret-access-key
    AWS_REGION=us-east-1
-   AZURE_SPEECH_LANGUAGE=en-US
+   AWS_LANGUAGE_CODE=en-US
+   ```
+   
+   **For Custom Service:**
+   ```bash
+   CUSTOM_SERVICE_URI=http://0.0.0.0:8000
    ```
 
 ## Usage
@@ -46,9 +51,10 @@ python speech-text.py --output results.csv
 # Change language
 python speech-text.py --language es-ES
 
-# Choose provider (Azure or Amazon)
+# Choose provider (Azure, Amazon, or Custom Service)
 python speech-text.py --provider azure
 python speech-text.py --provider amazon
+python speech-text.py --provider custom_service
 
 # Combine options
 python speech-text.py -a ./recordings -o output.csv -l en-US -p azure
@@ -60,8 +66,9 @@ python speech-text.py --help
 ```
 
 ### Supported Providers:
-- **Azure** ✅ - Fully supported
-- **Amazon** ✅ - Fully supported
+- **Azure** ✅ - Azure Cognitive Services Speech
+- **Amazon** ✅ - Amazon Transcribe with S3
+- **Custom Service** ✅ - Local or custom HTTP transcription service
 - **Google** 🔜 - Coming soon
 
 The script will:
@@ -95,6 +102,12 @@ The script generates a CSV file with three columns:
 2. Create an IAM user with Transcribe and S3 permissions
 3. Generate access keys
 4. Copy Access Key ID and Secret Access Key
+
+### Custom Service
+1. Run your local transcription service (e.g., on http://0.0.0.0:8000)
+2. Service must implement POST /transcribe endpoint accepting multipart/form-data file upload
+3. Service must return JSON response with "text" field
+4. Set CUSTOM_SERVICE_URI in .env to your service URL
 
 ## Architecture
 
