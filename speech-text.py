@@ -44,8 +44,8 @@ def main(
     Supported providers:
     - azure: Requires AZURE_SPEECH_KEY and AZURE_SPEECH_REGION
     - amazon: Requires AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY
+    - google: Requires GOOGLE_CLOUD_PROJECT (optional: GOOGLE_APPLICATION_CREDENTIALS for JSON auth)
     - custom_service: Requires CUSTOM_SERVICE_URI (default: http://0.0.0.0:8000)
-    - google: Coming soon
     """
     provider = provider.lower()
     
@@ -86,7 +86,7 @@ def main(
         
     else:
         typer.secho(
-            f"Error: Unknown provider '{provider}'. Use: azure, amazon, custom_service, or google",
+            f"Error: Unknown provider '{provider}'. Use: azure, amazon, google, or custom_service",
             fg=typer.colors.RED,
             bold=True
         )
@@ -114,6 +114,14 @@ def main(
             stt = ProviderFactory.create_provider(
                 provider=provider,
                 custom_service_uri=config['service_uri']
+            )
+        elif provider == "google":
+            stt = ProviderFactory.create_provider(
+                provider=provider,
+                project_id=config['project_id'],
+                location=config['location'],
+                language=lang,
+                credentials_file=config['credentials_file']
             )
         else:
             raise ValueError(f"Unknown provider: {provider}")

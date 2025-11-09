@@ -28,6 +28,14 @@ pip install -r requirements.txt
    AWS_LANGUAGE_CODE=en-US
    ```
    
+   **For Google Cloud:**
+   ```bash
+   GOOGLE_CLOUD_PROJECT=your-project-id
+   GOOGLE_CLOUD_LOCATION=global
+   # Optional: Use service account JSON file instead of ADC
+   GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json
+   ```
+   
    **For Custom Service:**
    ```bash
    CUSTOM_SERVICE_URI=http://0.0.0.0:8000
@@ -51,9 +59,10 @@ python speech-text.py --output results.csv
 # Change language
 python speech-text.py --language es-ES
 
-# Choose provider (Azure, Amazon, or Custom Service)
+# Choose provider (Azure, Amazon, Google, or Custom Service)
 python speech-text.py --provider azure
 python speech-text.py --provider amazon
+python speech-text.py --provider google
 python speech-text.py --provider custom_service
 
 # Combine options
@@ -68,8 +77,8 @@ python speech-text.py --help
 ### Supported Providers:
 - **Azure** ✅ - Azure Cognitive Services Speech
 - **Amazon** ✅ - Amazon Transcribe with S3
+- **Google** ✅ - Google Cloud Speech-to-Text v2
 - **Custom Service** ✅ - Local or custom HTTP transcription service
-- **Google** 🔜 - Coming soon
 
 The script will:
 - Load configuration from `.env` file (can be overridden with CLI options)
@@ -103,6 +112,25 @@ The script generates a CSV file with three columns:
 3. Generate access keys
 4. Copy Access Key ID and Secret Access Key
 
+### Google Cloud
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or select existing project
+3. Enable the Speech-to-Text API
+4. Set up authentication (choose one method):
+   
+   **Option A: Application Default Credentials (ADC) - Recommended for development:**
+   ```bash
+   gcloud auth application-default login
+   ```
+   
+   **Option B: Service Account JSON file - Recommended for production:**
+   - Go to IAM & Admin > Service Accounts
+   - Create a service account with "Cloud Speech Administrator" role
+   - Create and download a JSON key file
+   - Set `GOOGLE_APPLICATION_CREDENTIALS` in .env to the path of the JSON file
+   
+5. Copy your Project ID and set it in .env
+
 ### Custom Service
 1. Run your local transcription service (e.g., on http://0.0.0.0:8000)
 2. Service must implement POST /transcribe endpoint accepting multipart/form-data file upload
@@ -118,6 +146,8 @@ providers/
 ├── base_provider.py      # Abstract base class (interface)
 ├── azure_provider.py     # Azure implementation
 ├── amazon_provider.py    # Amazon implementation
+├── google_provider.py    # Google Cloud implementation
+├── custom_provider.py    # Custom service implementation
 ├── provider_factory.py   # Factory pattern for provider creation
 └── __init__.py
 ```
@@ -125,6 +155,8 @@ providers/
 - **SpeechToTextProvider**: Abstract base class defining the interface
 - **AzureSpeechToText**: Concrete implementation for Azure
 - **AmazonTranscribe**: Concrete implementation for Amazon
+- **GoogleSpeechToText**: Concrete implementation for Google Cloud
+- **CustomServiceProvider**: Concrete implementation for custom HTTP services
 - **ProviderFactory**: Factory to create provider instances
 
-This design makes it easy to add new providers (Google) without modifying existing code.
+This design makes it easy to add new providers without modifying existing code.

@@ -67,20 +67,25 @@ class AmazonConfig:
 
 
 class GoogleConfig:
-    """Google Cloud Speech configuration (placeholder for future implementation)."""
+    """Google Cloud Speech configuration."""
     
     @staticmethod
     def from_env() -> Dict[str, Optional[str]]:
         """Load Google configuration from environment variables."""
         return {
-            'credentials_file': os.getenv('GOOGLE_APPLICATION_CREDENTIALS'),
-            'project_id': os.getenv('GOOGLE_CLOUD_PROJECT')
+            'project_id': os.getenv('GOOGLE_CLOUD_PROJECT'),
+            'location': os.getenv('GOOGLE_CLOUD_LOCATION', 'global'),
+            'credentials_file': os.getenv('GOOGLE_APPLICATION_CREDENTIALS')
         }
     
     @staticmethod
     def validate() -> tuple[bool, Optional[str]]:
         """Validate Google configuration."""
-        return False, "Google provider is not yet implemented"
+        config = GoogleConfig.from_env()
+        if not config['project_id']:
+            return False, "GOOGLE_CLOUD_PROJECT not set in .env file"
+        return True, None
+        return True, None
 
 
 class CustomServiceConfig:

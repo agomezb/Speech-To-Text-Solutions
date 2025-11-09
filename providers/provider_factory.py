@@ -8,6 +8,7 @@ from .base_provider import SpeechToTextProvider
 from .azure_provider import AzureSpeechToText
 from .amazon_provider import AmazonTranscribe
 from .custom_provider import CustomServiceProvider
+from .google_provider import GoogleSpeechToText
 
 
 class ProviderFactory:
@@ -22,7 +23,10 @@ class ProviderFactory:
         endpoint: Optional[str] = None,
         aws_access_key_id: str = None,
         aws_secret_access_key: str = None,
-        custom_service_uri: str = None
+        custom_service_uri: str = None,
+        project_id: str = None,
+        location: str = "global",
+        credentials_file: str = None
     ) -> SpeechToTextProvider:
         """
         Create a speech-to-text provider instance.
@@ -36,6 +40,9 @@ class ProviderFactory:
             aws_access_key_id: AWS access key (Amazon)
             aws_secret_access_key: AWS secret key (Amazon)
             custom_service_uri: URI for custom service (Custom Service)
+            project_id: Google Cloud project ID (Google)
+            location: Google Cloud location (Google, default: "global")
+            credentials_file: Path to Google service account JSON file (Google, optional)
             
         Returns:
             SpeechToTextProvider instance
@@ -70,9 +77,17 @@ class ProviderFactory:
                 service_uri=custom_service_uri
             )
         elif provider == "google":
-            raise NotImplementedError("Google provider is not yet implemented")
+            if not project_id:
+                raise ValueError("project_id is required for Google provider")
+            return GoogleSpeechToText(
+                project_id=project_id,
+                location=location,
+                language=language,
+                credentials_file=credentials_file
+            )
         else:
             raise ValueError(
                 f"Unknown provider: {provider}. "
-                f"Supported providers: azure, amazon, custom_service, google (coming soon)"
+                f"Supported providers: azure, amazon, google, custom_service"
             )
+
