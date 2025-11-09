@@ -74,7 +74,8 @@ class ProviderFactory:
             if not custom_service_uri:
                 raise ValueError("custom_service_uri is required for Custom Service provider")
             return CustomServiceProvider(
-                service_uri=custom_service_uri
+                service_uri=custom_service_uri,
+                language=language
             )
         elif provider == "google":
             if not project_id:

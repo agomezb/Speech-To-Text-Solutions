@@ -7,7 +7,7 @@ import os
 import time
 import uuid
 import boto3
-from typing import Dict, Optional
+from typing import Dict
 from .base_provider import SpeechToTextProvider
 
 

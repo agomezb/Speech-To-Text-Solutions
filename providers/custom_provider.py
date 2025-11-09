@@ -12,14 +12,16 @@ from .base_provider import SpeechToTextProvider
 class CustomServiceProvider(SpeechToTextProvider):
     """Handles speech-to-text transcription using a custom HTTP service."""
     
-    def __init__(self, service_uri: str):
+    def __init__(self, service_uri: str, language: str = "en-US"):
         """
         Initialize Custom Service provider.
         
         Args:
             service_uri: Base URI of the transcription service (e.g., 'http://0.0.0.0:8000')
+            language: Speech recognition language (default: 'en-US')
         """
         self.service_uri = service_uri.rstrip('/')
+        self.language = language
         self.transcribe_endpoint = f"{self.service_uri}/transcribe"
         
         # Verify service is available
