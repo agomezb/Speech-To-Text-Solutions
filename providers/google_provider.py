@@ -1,6 +1,7 @@
 """Google Cloud Speech-to-Text provider implementation."""
 
 import os
+import time
 from typing import Optional
 from google.cloud.speech_v2 import SpeechClient  # type: ignore
 from google.cloud.speech_v2.types import cloud_speech  # type: ignore
@@ -70,8 +71,15 @@ class GoogleSpeechToText(SpeechToTextProvider):
                 content=audio_content,
             )
             
-            # Perform synchronous recognition
+            # Perform synchronous recognition with timing
+            filename = os.path.basename(audio_file)
+            print(f"Transcribing: {filename}")
+            
+            start_time = time.time()
             response = self.client.recognize(request=request)
+            transcription_time = time.time() - start_time
+            
+            print(f"✓ Google transcription time: {transcription_time:.1f}s")
             
             # Extract transcription from response
             transcript = ""
@@ -79,11 +87,11 @@ class GoogleSpeechToText(SpeechToTextProvider):
                 if result.alternatives:
                     transcript += result.alternatives[0].transcript + " "
             
-            filename = os.path.basename(audio_file)
             return {
                 "filename": filename,
                 "text": transcript.strip(),
-                "status": "success"
+                "status": "success",
+                "transcription_time": f"{transcription_time:.2f}"
             }
             
         except Exception as e:
@@ -91,5 +99,6 @@ class GoogleSpeechToText(SpeechToTextProvider):
             return {
                 "filename": filename,
                 "text": "",
-                "status": f"error: {str(e)}"
+                "status": f"error: {str(e)}",
+                "transcription_time": ""
             }
