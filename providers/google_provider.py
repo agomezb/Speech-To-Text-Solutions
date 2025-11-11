@@ -15,7 +15,7 @@ class GoogleSpeechToText(SpeechToTextProvider):
     def __init__(
         self, 
         project_id: str, 
-        location: str = "global", 
+        location: str,
         language: str = "en-US",
         credentials_file: Optional[str] = None
     ):
@@ -33,15 +33,18 @@ class GoogleSpeechToText(SpeechToTextProvider):
         self.location = location
         self.language = language
         
+        client_options = {
+            "api_endpoint": f"{self.location}-speech.googleapis.com"
+        }
         # Initialize client with appropriate credentials
         if credentials_file and os.path.exists(credentials_file):
             credentials = service_account.Credentials.from_service_account_file(
                 credentials_file
             )
-            self.client = SpeechClient(credentials=credentials)
+            self.client = SpeechClient(credentials=credentials, client_options=client_options)
         else:
             # Use Application Default Credentials (ADC)
-            self.client = SpeechClient()
+            self.client = SpeechClient(client_options=client_options)
         
     def transcribe_file(self, audio_file: str) -> dict:
         """
@@ -62,7 +65,7 @@ class GoogleSpeechToText(SpeechToTextProvider):
             config = cloud_speech.RecognitionConfig(
                 auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
                 language_codes=[self.language],
-                model="long",
+                model="chirp_3",
             )
             
             request = cloud_speech.RecognizeRequest(
