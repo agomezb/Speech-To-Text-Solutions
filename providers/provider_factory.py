@@ -48,11 +48,14 @@ class ProviderFactory:
         elif provider == "amazon":
             if not config.get('aws_access_key_id') or not config.get('aws_secret_access_key'):
                 raise ValueError("aws_access_key_id and aws_secret_access_key are required for Amazon provider")
+            if not config.get('bucket_name'):
+                raise ValueError("bucket_name is required for Amazon provider")
             return AmazonTranscribe(
                 aws_access_key_id=config['aws_access_key_id'],
                 aws_secret_access_key=config['aws_secret_access_key'],
                 region=config.get('region', 'us-east-1'),
-                language=language
+                language=language,
+                bucket_name=config['bucket_name']
             )
         elif provider == "custom_service":
             if not config.get('service_uri'):

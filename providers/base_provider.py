@@ -73,9 +73,25 @@ class SpeechToTextProvider(ABC):
             results: List of transcription results
             output_file: Output CSV file path
         """
+        if not results:
+            return
+        
+        # Collect all unique fields from all results
+        fieldnames = []
+        all_keys = set()
+        for result in results:
+            all_keys.update(result.keys())
+        
+        # Standard fields first
+        standard_fields = ['filename', 'text', 'status', 'transcription_time']
+        fieldnames = [f for f in standard_fields if f in all_keys]
+        
+        # Add any additional fields
+        additional_fields = sorted(all_keys - set(standard_fields))
+        fieldnames.extend(additional_fields)
+        
         with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
-            fieldnames = ['filename', 'text', 'status']
-            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames, extrasaction='ignore')
             
             writer.writeheader()
             for result in results:

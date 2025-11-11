@@ -5,7 +5,6 @@ Handles speech-to-text transcription using AWS Transcribe.
 
 import os
 import time
-import uuid
 import boto3
 from typing import Dict
 from .base_provider import SpeechToTextProvider
@@ -19,7 +18,8 @@ class AmazonTranscribe(SpeechToTextProvider):
         aws_access_key_id: str,
         aws_secret_access_key: str,
         region: str = "us-east-1",
-        language: str = "en-US"
+        language: str = "en-US",
+        bucket_name: str = None
     ):
         """
         Initialize Amazon Transcribe service.
@@ -29,9 +29,19 @@ class AmazonTranscribe(SpeechToTextProvider):
             aws_secret_access_key: AWS secret access key
             region: AWS region (e.g., 'us-east-1', 'eu-west-1')
             language: Speech recognition language (default: 'en-US')
+            bucket_name: S3 bucket name for temporary audio storage (required)
         """
         self.region = region
         self.language = language
+        
+        # Validate bucket_name is provided
+        if not bucket_name:
+            raise ValueError(
+                "bucket_name is required. Please provide an existing S3 bucket name "
+                "or set AWS_S3_BUCKET environment variable."
+            )
+        
+        self.bucket_name = bucket_name
         
         # Initialize boto3 clients
         self.transcribe_client = boto3.client(
@@ -48,43 +58,31 @@ class AmazonTranscribe(SpeechToTextProvider):
             region_name=region
         )
         
-        # Generate unique bucket name for temporary storage
-        # Use UUID to ensure global uniqueness across all AWS accounts
-        unique_id = str(uuid.uuid4())[:8]
-        self.bucket_name = f"transcribe-temp-{unique_id}"
-        self._ensure_bucket_exists()
+        # Verify bucket exists and is accessible
+        self._verify_bucket_access()
     
-    def _ensure_bucket_exists(self):
-        """Create S3 bucket if it doesn't exist."""
+    def _verify_bucket_access(self):
+        """Verify S3 bucket exists and is accessible."""
         try:
             self.s3_client.head_bucket(Bucket=self.bucket_name)
-            print(f"Using existing bucket: {self.bucket_name}")
+            print(f"✓ Successfully connected to S3 bucket: {self.bucket_name}")
         except Exception as e:
-            # Check if it's a 404 (bucket doesn't exist) or 403 (no permission)
             error_code = e.response.get('Error', {}).get('Code', '') if hasattr(e, 'response') else ''
             
-            if error_code == '404' or 'NoSuchBucket' in str(e) or 'Not Found' in str(e):
-                # Bucket doesn't exist, create it
-                print(f"Creating bucket: {self.bucket_name}")
-                try:
-                    if self.region == 'us-east-1':
-                        self.s3_client.create_bucket(Bucket=self.bucket_name)
-                    else:
-                        self.s3_client.create_bucket(
-                            Bucket=self.bucket_name,
-                            CreateBucketConfiguration={'LocationConstraint': self.region}
-                        )
-                    print(f"✓ Bucket created successfully: {self.bucket_name}")
-                except Exception as create_error:
-                    raise Exception(
-                        f"Failed to create S3 bucket '{self.bucket_name}': {str(create_error)}. "
-                        f"Please check your AWS permissions (s3:CreateBucket, s3:PutObject)"
-                    )
+            if error_code == '404' or 'NoSuchBucket' in str(e):
+                raise ValueError(
+                    f"S3 bucket '{self.bucket_name}' does not exist. "
+                    f"Please create the bucket first using AWS Console or CLI:\n"
+                    f"  aws s3 mb s3://{self.bucket_name} --region {self.region}"
+                )
+            elif error_code == '403':
+                raise PermissionError(
+                    f"Access denied to S3 bucket '{self.bucket_name}'. "
+                    f"Please check your AWS credentials have s3:GetBucketLocation permission."
+                )
             else:
-                # Other error (permission denied, etc.)
                 raise Exception(
-                    f"Failed to access S3 bucket '{self.bucket_name}': {str(e)}. "
-                    f"Please check your AWS credentials and permissions."
+                    f"Failed to access S3 bucket '{self.bucket_name}': {str(e)}"
                 )
     
     def transcribe_file(self, audio_file_path: str) -> Dict[str, str]:
@@ -117,8 +115,18 @@ class AmazonTranscribe(SpeechToTextProvider):
                 LanguageCode=self.language
             )
             
-            # Wait for job to complete
+            # Wait for job to complete (AWS Transcribe doesn't have built-in waiters)
+            print(f"Waiting for transcription to complete: {filename}")
+            max_wait_time = 300  # 5 minutes
+            start_time = time.time()
+            poll_interval = 5  # Poll every 5 seconds
+            
             while True:
+                # Check timeout
+                elapsed = time.time() - start_time
+                if elapsed > max_wait_time:
+                    raise TimeoutError(f"Transcription job exceeded {max_wait_time} seconds")
+                
                 response = self.transcribe_client.get_transcription_job(
                     TranscriptionJobName=job_name
                 )
@@ -126,7 +134,21 @@ class AmazonTranscribe(SpeechToTextProvider):
                 
                 if status in ['COMPLETED', 'FAILED']:
                     break
-                time.sleep(2)
+                
+                time.sleep(poll_interval)
+            
+            # Get job status after completion
+            status = response['TranscriptionJob']['TranscriptionJobStatus']
+            
+            # Get AWS-reported timing from the job response
+            job = response['TranscriptionJob']
+            creation_time = job.get('CreationTime')
+            completion_time = job.get('CompletionTime')
+            
+            aws_duration = None
+            if creation_time and completion_time and status == 'COMPLETED':
+                aws_duration = (completion_time - creation_time).total_seconds()
+                print(f"✓ AWS transcription time: {aws_duration:.1f}s")
             
             # Clean up S3 file
             self.s3_client.delete_object(Bucket=self.bucket_name, Key=s3_key)
@@ -156,7 +178,8 @@ class AmazonTranscribe(SpeechToTextProvider):
                 return {
                     "filename": filename,
                     "text": text,
-                    "status": "success"
+                    "status": "success",
+                    "transcription_time": f"{aws_duration:.2f}" if aws_duration else ""
                 }
             else:
                 failure_reason = response['TranscriptionJob'].get('FailureReason', 'Unknown')
@@ -167,7 +190,8 @@ class AmazonTranscribe(SpeechToTextProvider):
                 return {
                     "filename": filename,
                     "text": "",
-                    "status": f"failed: {failure_reason}"
+                    "status": f"failed: {failure_reason}",
+                    "transcription_time": ""
                 }
                 
         except Exception as e:
@@ -181,5 +205,6 @@ class AmazonTranscribe(SpeechToTextProvider):
             return {
                 "filename": filename,
                 "text": "",
-                "status": f"exception: {str(e)}"
+                "status": f"exception: {str(e)}",
+                "transcription_time": ""
             }

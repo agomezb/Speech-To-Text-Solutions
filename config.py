@@ -54,7 +54,8 @@ class AmazonConfig:
         return {
             'aws_access_key_id': os.getenv('AWS_ACCESS_KEY_ID'),
             'aws_secret_access_key': os.getenv('AWS_SECRET_ACCESS_KEY'),
-            'region': os.getenv('AWS_REGION', 'us-east-1')
+            'region': os.getenv('AWS_REGION', 'us-east-1'),
+            'bucket_name': os.getenv('AWS_S3_BUCKET')
         }
     
     @staticmethod
@@ -63,6 +64,8 @@ class AmazonConfig:
         config = AmazonConfig.from_env()
         if not config['aws_access_key_id'] or not config['aws_secret_access_key']:
             return False, "AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY not set in .env file"
+        if not config['bucket_name']:
+            return False, "AWS_S3_BUCKET not set in .env file"
         return True, None
 
 
