@@ -4,6 +4,7 @@ Handles speech-to-text transcription using Azure AI Services.
 """
 
 import os
+import time
 from typing import Dict, Optional
 import azure.cognitiveservices.speech as speechsdk
 from .base_provider import SpeechToTextProvider
@@ -73,19 +74,27 @@ class AzureSpeechToText(SpeechToTextProvider):
             )
             
             print(f"Transcribing: {filename}")
+            
+            # Track transcription time
+            start_time = time.time()
             result = speech_recognizer.recognize_once()
+            transcription_time = time.time() - start_time
+            
+            print(f"✓ Azure transcription time: {transcription_time:.1f}s")
             
             if result.reason == speechsdk.ResultReason.RecognizedSpeech:
                 return {
                     "filename": filename,
                     "text": result.text,
-                    "status": "success"
+                    "status": "success",
+                    "transcription_time": f"{transcription_time:.2f}"
                 }
             elif result.reason == speechsdk.ResultReason.NoMatch:
                 return {
                     "filename": filename,
                     "text": "",
-                    "status": "no_speech_detected"
+                    "status": "no_speech_detected",
+                    "transcription_time": f"{transcription_time:.2f}"
                 }
             elif result.reason == speechsdk.ResultReason.Canceled:
                 cancellation = speechsdk.CancellationDetails.FromResult(result)
@@ -100,18 +109,21 @@ class AzureSpeechToText(SpeechToTextProvider):
                 return {
                     "filename": filename,
                     "text": "",
-                    "status": f"canceled: {error_details}"
+                    "status": f"canceled: {error_details}",
+                    "transcription_time": f"{transcription_time:.2f}"
                 }
             else:
                 return {
                     "filename": filename,
                     "text": "",
-                    "status": f"unknown_result: {result.reason}"
+                    "status": f"unknown_result: {result.reason}",
+                    "transcription_time": f"{transcription_time:.2f}"
                 }
                 
         except Exception as e:
             return {
                 "filename": filename,
                 "text": "",
-                "status": f"exception: {str(e)}"
+                "status": f"exception: {str(e)}",
+                "transcription_time": ""
             }
