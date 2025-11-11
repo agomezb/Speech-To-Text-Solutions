@@ -4,6 +4,7 @@ Handles speech-to-text transcription using a custom local/remote service.
 """
 
 import os
+import time
 import requests
 from typing import Dict
 from .base_provider import SpeechToTextProvider
@@ -47,6 +48,9 @@ class CustomServiceProvider(SpeechToTextProvider):
         try:
             print(f"Transcribing: {filename}")
             
+            # Track transcription time
+            start_time = time.time()
+            
             # Open and send the audio file
             with open(audio_file_path, 'rb') as audio_file:
                 files = {'file': (filename, audio_file)}
@@ -64,6 +68,10 @@ class CustomServiceProvider(SpeechToTextProvider):
                 # Parse response
                 result = response.json()
                 
+                # Calculate transcription time
+                transcription_time = time.time() - start_time
+                print(f"✓ Custom service transcription time: {transcription_time:.1f}s")
+                
                 # Extract text from response
                 # Assuming the API returns {"text": "transcribed text", ...}
                 text = result.get('text', '')
@@ -71,30 +79,35 @@ class CustomServiceProvider(SpeechToTextProvider):
                 return {
                     "filename": filename,
                     "text": text,
-                    "status": "success"
+                    "status": "success",
+                    "transcription_time": f"{transcription_time:.2f}"
                 }
                 
         except requests.exceptions.Timeout:
             return {
                 "filename": filename,
                 "text": "",
-                "status": "error: request timeout"
+                "status": "error: request timeout",
+                "transcription_time": ""
             }
         except requests.exceptions.ConnectionError:
             return {
                 "filename": filename,
                 "text": "",
-                "status": f"error: cannot connect to service at {self.service_uri}"
+                "status": f"error: cannot connect to service at {self.service_uri}",
+                "transcription_time": ""
             }
         except requests.exceptions.HTTPError as e:
             return {
                 "filename": filename,
                 "text": "",
-                "status": f"error: HTTP {e.response.status_code}"
+                "status": f"error: HTTP {e.response.status_code}",
+                "transcription_time": ""
             }
         except Exception as e:
             return {
                 "filename": filename,
                 "text": "",
-                "status": f"exception: {str(e)}"
+                "status": f"exception: {str(e)}",
+                "transcription_time": ""
             }
