@@ -34,14 +34,8 @@ def calculate_noise_gain(voice_dbfs: float, target_snr: int) -> float:
     return target_noise_dbfs
 
 
-def mix_audio_at_snr(voice: AudioSegment, noise: AudioSegment, target_snr: int) -> AudioSegment:
-    """Mix voice and noise at specified SNR level."""
-    # Get random noise segment matching voice duration
-    noise_segment = get_random_noise_segment(noise, len(voice))
-    
-    if noise_segment is None:
-        return None
-    
+def mix_audio_at_snr(voice: AudioSegment, noise_segment: AudioSegment, target_snr: int) -> AudioSegment:
+    """Mix voice and noise segment at specified SNR level."""
     # Calculate required noise level
     voice_dbfs = voice.dBFS
     target_noise_dbfs = calculate_noise_gain(voice_dbfs, target_snr)
@@ -94,17 +88,19 @@ def generate_dataset(
         for noise_file in noise_files:
             noise = standardize_audio(AudioSegment.from_wav(noise_file))
             
-            # Generate mix at each SNR level
+            # Get ONE random noise segment for this voice-noise pair
+            noise_segment = get_random_noise_segment(noise, len(voice))
+            
+            if noise_segment is None:
+                typer.echo(f"  ⚠️  Skipping {voice_file.stem}_{noise_file.stem}: noise file too short", err=True)
+                continue
+            
+            # Generate mix at each SNR level using the SAME noise segment
             for snr in snr_levels:
                 output_name = f"{voice_file.stem}_{noise_file.stem}_{snr}dB.wav"
                 output_path = output_dir / output_name
                 
-                mixed = mix_audio_at_snr(voice, noise, snr)
-                
-                if mixed is None:
-                    typer.echo(f"  ⚠️  Skipping {output_name}: noise file too short", err=True)
-                    continue
-                
+                mixed = mix_audio_at_snr(voice, noise_segment, snr)
                 mixed.export(output_path, format="wav")
                 processed += 1
                 typer.echo(f"  ✓ Generated: {output_name} ({processed}/{total_files})")
