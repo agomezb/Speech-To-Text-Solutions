@@ -77,19 +77,22 @@ class TextNormalizer:
         # Paso 1: Convertir a minúsculas
         text = self._to_lowercase(text)
         
-        # Paso 2: Aplicar reemplazos personalizados (antes de eliminar puntuación)
+        # Paso 2: Separar letras y números pegados (CRÍTICO para Amazon ASR)
+        text = self._separate_letters_and_numbers(text)
+        
+        # Paso 3: Aplicar reemplazos personalizados (antes de eliminar puntuación)
         text = self._apply_custom_replacements(text)
         
-        # Paso 3: Convertir números a palabras
+        # Paso 4: Convertir números a palabras
         text = self._numbers_to_words(text)
         
-        # Paso 4: Eliminar puntuación
+        # Paso 5: Eliminar puntuación
         text = self._remove_punctuation(text)
         
-        # Paso 5: Post-procesamiento específico de español
+        # Paso 6: Post-procesamiento específico de español
         text = self._spanish_post_processing(text)
         
-        # Paso 6: Limpiar espacios
+        # Paso 7: Limpiar espacios
         text = self._clean_whitespace(text)
         
         return text
@@ -98,6 +101,31 @@ class TextNormalizer:
     def _to_lowercase(text: str) -> str:
         """Convierte el texto a minúsculas."""
         return text.lower()
+    
+    @staticmethod
+    def _separate_letters_and_numbers(text: str) -> str:
+        """
+        Separa letras y números que están concatenados sin espacios.
+        
+        Este método soluciona el problema de ASR (especialmente Amazon) que 
+        concatena letras y números, generando cadenas como:
+        - FA409516 -> FA 409516
+        - RU09220783 -> RU 09220783
+        - i73 -> i 73
+        
+        Args:
+            text: Texto con posibles concatenaciones.
+            
+        Returns:
+            Texto con letras y números separados por espacios.
+        """
+        # Insertar espacio entre letra y número
+        text = re.sub(r'([a-zA-Z])(\d)', r'\1 \2', text)
+        
+        # Insertar espacio entre número y letra
+        text = re.sub(r'(\d)([a-zA-Z])', r'\1 \2', text)
+        
+        return text
     
     def _apply_custom_replacements(self, text: str) -> str:
         """

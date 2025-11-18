@@ -43,7 +43,20 @@ El script aplica las siguientes transformaciones en orden:
 ### 1. Minúsculas
 Todo el texto se convierte a minúsculas.
 
-### 2. Reemplazos de Dominio (antes de eliminar puntuación)
+### 2. Separación de Letras y Números (CRÍTICO para Amazon)
+Separa automáticamente letras y números que están concatenados sin espacios. Esto soluciona el problema común de Amazon ASR que concatena caracteres.
+
+**Ejemplos de transformación:**
+- `FA409516` → `FA 409516` (luego se procesa como "efe a" + números)
+- `RU0922078366001` → `RU 0922078366001` 
+- `i73` → `i 73` (luego se procesa como "i setenta y tres")
+- `A4` → `A 4` (luego se procesa por reemplazo personalizado)
+
+Esta función usa regex para insertar espacios entre:
+- Letra seguida de número: `([a-zA-Z])(\d)` → `\1 \2`
+- Número seguido de letra: `(\d)([a-zA-Z])` → `\1 \2`
+
+### 3. Reemplazos de Dominio (antes de eliminar puntuación)
 
 | Original | Normalizado | Tipo |
 |----------|-------------|------|
@@ -56,22 +69,22 @@ Todo el texto se convierte a minúsculas.
 | `XG` | `equis ge` | Modelo |
 | `FA`, `F A` | `efe a` | Código factura |
 
-### 3. Números a Palabras (español)
+### 4. Números a Palabras (español)
 - **Números cortos (≤ 4 dígitos):** Se convierten directamente
   - Ejemplo: `5` → `"cinco"`, `50` → `"cincuenta"`
 - **Números largos (> 4 dígitos):** Se convierten dígito por dígito
   - Ejemplo: `0922078366001` → `"cero nueve dos dos cero siete ocho tres seis seis cero cero uno"`
   - Útil para RUC, teléfonos, códigos de factura
 
-### 4. Eliminación de Puntuación
+### 5. Eliminación de Puntuación
 Se eliminan todos los signos de puntuación: `. , : ; ? ! - ( ) " '`
 
-### 5. Post-procesamiento Español
+### 6. Post-procesamiento Español
 Correcciones específicas del idioma:
 - `"uno terabyte"` → `"un terabyte"`
 - `"uno gigabyte"` → `"un gigabyte"`
 
-### 6. Limpieza de Espacios
+### 7. Limpieza de Espacios
 - Elimina espacios múltiples
 - Elimina espacios al inicio y final
 
@@ -89,19 +102,41 @@ Genera una proforma para Andina Corp. con 2 laptops Core i7 y 1 TB de disco.
 genera una proforma para andina corp con dos laptops core i siete y un terabyte de disco
 ```
 
-### Ejemplo 2: Factura con código
+### Ejemplo 2: Factura con código concatenado (problema Amazon)
 
 **Entrada:**
 ```
-verifica si la factura FA 409516 de Hierro del Pacífico ya está pagada.
+Verifica si la factura FA409516 de Hierro del Pacífico ya está pagada.
 ```
+
+**Proceso:**
+1. Separación: `FA409516` → `FA 409516`
+2. Reemplazo: `FA` → `efe a`
+3. Números largos: `409516` → `cuatro cero nueve cinco uno seis`
 
 **Salida:**
 ```
 verifica si la factura efe a cuatro cero nueve cinco uno seis de hierro del pacífico ya está pagada
 ```
 
-### Ejemplo 3: Número largo (RUC)
+### Ejemplo 3: Modelo concatenado (problema Amazon)
+
+**Entrada:**
+```
+Compra laptops core i73 impresoras
+```
+
+**Proceso:**
+1. Separación: `i73` → `i 73`
+2. Reemplazo: `i` → `i`
+3. Número corto: `73` → `setenta y tres`
+
+**Salida:**
+```
+compra laptops core i setenta y tres impresoras
+```
+
+### Ejemplo 4: Número largo (RUC)
 
 **Entrada:**
 ```
