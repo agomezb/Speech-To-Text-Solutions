@@ -12,6 +12,8 @@ import typer
 
 app = typer.Typer()
 
+# fijamos la semilla para resultados consistentes
+random.seed(42)
 
 def standardize_audio(audio: AudioSegment) -> AudioSegment:
     """Standardize audio to 16kHz, mono, 16-bit."""
@@ -28,17 +30,14 @@ def get_random_noise_segment(noise: AudioSegment, duration_ms: int) -> AudioSegm
     return noise[start_pos:start_pos + duration_ms]
 
 
-def calculate_noise_gain(voice_dbfs: float, target_snr: int) -> float:
-    """Calculate required noise gain to achieve target SNR."""
-    target_noise_dbfs = voice_dbfs - target_snr
-    return target_noise_dbfs
-
-
 def mix_audio_at_snr(voice: AudioSegment, noise_segment: AudioSegment, target_snr: int) -> AudioSegment:
     """Mix voice and noise segment at specified SNR level."""
     # Calculate required noise level
-    voice_dbfs = voice.dBFS
-    target_noise_dbfs = calculate_noise_gain(voice_dbfs, target_snr)
+    safe_voice = voice.normalize() # Normaliza a 0 dB primero
+    safe_voice = safe_voice.apply_gain(-10.0) # Bajamos a -10 dB (Headroom)
+
+    voice_dbfs = safe_voice.dBFS
+    target_noise_dbfs = voice_dbfs - target_snr
     
     # Adjust noise level
     current_noise_dbfs = noise_segment.dBFS
@@ -46,7 +45,7 @@ def mix_audio_at_snr(voice: AudioSegment, noise_segment: AudioSegment, target_sn
     adjusted_noise = noise_segment.apply_gain(gain_adjustment)
     
     # Mix voice and noise
-    return voice.overlay(adjusted_noise)
+    return safe_voice.overlay(adjusted_noise)
 
 
 @app.command()
@@ -76,17 +75,33 @@ def generate_dataset(
     typer.echo(f"Found {len(voice_files)} voice files and {len(noise_files)} noise files")
     typer.echo(f"Generating mixes at SNR levels: {snr_levels} dB")
     
-    total_files = len(voice_files) * len(noise_files) * len(snr_levels)
+    # Preload all noise files into memory (optimization)
+    typer.echo("\nPreloading noise files into memory...")
+    noise_data = {}
+    for noise_file in noise_files:
+        noise_data[noise_file.stem] = standardize_audio(AudioSegment.from_wav(noise_file))
+        typer.echo(f"  ✓ Loaded: {noise_file.name}")
+    
+    # Total files = clean versions + noisy versions
+    total_files = len(voice_files) + (len(voice_files) * len(noise_files) * len(snr_levels))
     processed = 0
+    clean_files = 0
     
     # Process each voice file
     for voice_file in voice_files:
         typer.echo(f"\nProcessing voice file: {voice_file.name}")
         voice = standardize_audio(AudioSegment.from_wav(voice_file))
         
-        # Mix with each noise file
+        # Export clean version (normalized with same headroom as noisy versions)
+        clean_voice = voice.normalize().apply_gain(-10.0)
+        clean_output_path = output_dir / f"{voice_file.stem}_clean.wav"
+        clean_voice.export(clean_output_path, format="wav")
+        clean_files += 1
+        typer.echo(f"  ✓ Exported clean version: {voice_file.stem}_clean.wav")
+        
+        # Mix with each noise file (using preloaded noise from memory)
         for noise_file in noise_files:
-            noise = standardize_audio(AudioSegment.from_wav(noise_file))
+            noise = noise_data[noise_file.stem]  # Get from memory instead of loading from disk
             
             # Get ONE random noise segment for this voice-noise pair
             noise_segment = get_random_noise_segment(noise, len(voice))
@@ -103,9 +118,12 @@ def generate_dataset(
                 mixed = mix_audio_at_snr(voice, noise_segment, snr)
                 mixed.export(output_path, format="wav")
                 processed += 1
-                typer.echo(f"  ✓ Generated: {output_name} ({processed}/{total_files})")
+                typer.echo(f"  ✓ Generated: {output_name} ({processed + clean_files}/{total_files})")
     
-    typer.echo(f"\n✅ Dataset generation complete! Generated {processed} files in {output_dir}")
+    typer.echo(f"\n✅ Dataset generation complete!")
+    typer.echo(f"   - Clean files: {clean_files}")
+    typer.echo(f"   - Noisy files: {processed}")
+    typer.echo(f"   - Total: {processed + clean_files} files in {output_dir}")
 
 
 if __name__ == "__main__":

@@ -5,12 +5,13 @@ __pycache__/
 
 # C extensions
 *.so
-
+*.csv
 # Distribution / packaging
 .Python
 build/
 develop-eggs/
 dist/
+audio_noise/
 downloads/
 eggs/
 .eggs/
@@ -87,7 +88,7 @@ Pipfile.lock
 
 # PEP 582
 __pypackages__/
-
+audio/
 # Celery stuff
 celerybeat-schedule
 celerybeat.pid

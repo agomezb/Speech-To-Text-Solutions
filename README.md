@@ -94,10 +94,14 @@ The script will:
 
 ## Output
 
-The script generates a CSV file with three columns:
+The script generates a CSV file with the following columns:
 - `filename`: Name of the audio file
+- `provider`: Speech-to-text provider used (amazon, azure, google, or custom)
 - `text`: Transcribed text
 - `status`: Status of the transcription (success, error, etc.)
+- `transcription_time`: Time taken for transcription (in seconds)
+
+**Note:** If the output CSV file already exists, new transcription results will be **appended** to the end of the file. This allows you to run multiple transcription batches and accumulate results in the same file. To start fresh, delete the existing CSV file before running.
 
 ## Getting Credentials
 
