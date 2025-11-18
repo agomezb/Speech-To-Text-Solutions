@@ -29,6 +29,8 @@ class GoogleSpeechToText(SpeechToTextProvider):
             credentials_file: Path to service account JSON file (optional)
                 If not provided, uses Application Default Credentials (ADC)
         """
+        super().__init__()
+        self.provider_name = "google"
         self.project_id = project_id
         self.location = location
         self.language = language

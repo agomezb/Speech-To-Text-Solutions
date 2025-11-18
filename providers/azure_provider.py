@@ -29,6 +29,8 @@ class AzureSpeechToText(SpeechToTextProvider):
             language: Speech recognition language (default: 'en-US')
             endpoint: Optional custom endpoint URL (for custom models or containers)
         """
+        super().__init__()
+        self.provider_name = "azure"
         self.subscription_key = subscription_key
         self.region = region
         

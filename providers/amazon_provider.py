@@ -31,6 +31,8 @@ class AmazonTranscribe(SpeechToTextProvider):
             language: Speech recognition language (default: 'en-US')
             bucket_name: S3 bucket name for temporary audio storage (required)
         """
+        super().__init__()
+        self.provider_name = "amazon"
         self.region = region
         self.language = language
         

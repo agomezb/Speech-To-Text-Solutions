@@ -21,6 +21,8 @@ class CustomServiceProvider(SpeechToTextProvider):
             service_uri: Base URI of the transcription service (e.g., 'http://0.0.0.0:8000')
             language: Speech recognition language (default: 'en-US')
         """
+        super().__init__()
+        self.provider_name = "custom"
         self.service_uri = service_uri.rstrip('/')
         self.language = language
         self.transcribe_endpoint = f"{self.service_uri}/transcribe"
