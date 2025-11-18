@@ -96,7 +96,9 @@ class AmazonTranscribe(SpeechToTextProvider):
             Dictionary with filename, text, and status
         """
         filename = os.path.basename(audio_file_path)
-        job_name = f"transcribe-{int(time.time())}-{filename.replace('.', '-')}"
+        # Sanitize filename for job name: replace spaces and invalid chars with underscores
+        sanitized_name = filename.replace('.', '-').replace(' ', '_')
+        job_name = f"transcribe-{int(time.time())}-{sanitized_name}"
         s3_key = f"audio/{filename}"
         
         try:
