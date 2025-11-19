@@ -177,6 +177,9 @@ class AmazonTranscribe(SpeechToTextProvider):
                 
                 text = transcript_data['results']['transcripts'][0]['transcript']
                 
+                # Clean up job
+                self.transcribe_client.delete_transcription_job(TranscriptionJobName=job_name)
+                
                 return {
                     "filename": filename,
                     "text": text,
@@ -186,6 +189,9 @@ class AmazonTranscribe(SpeechToTextProvider):
             else:
                 failure_reason = response['TranscriptionJob'].get('FailureReason', 'Unknown')
                 
+                # Clean up failed job
+                self.transcribe_client.delete_transcription_job(TranscriptionJobName=job_name)
+                
                 return {
                     "filename": filename,
                     "text": "",
@@ -194,8 +200,12 @@ class AmazonTranscribe(SpeechToTextProvider):
                 }
                 
         except Exception as e:
-            # Note: S3 files are left for debugging. Clean up manually if needed:
-            # aws s3 rm s3://{bucket_name}/audio/ --recursive
+            # Clean up on error
+            try:
+                self.s3_client.delete_object(Bucket=self.bucket_name, Key=s3_key)
+                self.transcribe_client.delete_transcription_job(TranscriptionJobName=job_name)
+            except:
+                pass
             
             return {
                 "filename": filename,
@@ -253,13 +263,32 @@ class AmazonTranscribe(SpeechToTextProvider):
         Returns:
             List of transcription results
         """
-        import json
-        import urllib.request
-        import ssl
+        # Step 1: Upload all files to S3
+        jobs = self._upload_files_to_s3(audio_files)
         
-        # Step 1: Upload all files to S3 in parallel
+        # Step 2: Start all transcription jobs
+        self._start_transcription_jobs(jobs)
+        
+        # Step 3: Wait for all jobs to complete
+        self._wait_for_jobs_completion(jobs)
+        
+        # Step 4: Process results and cleanup
+        results = self._process_results_and_cleanup(jobs)
+        
+        return results
+    
+    def _upload_files_to_s3(self, audio_files: List[str]) -> Dict:
+        """
+        Upload audio files to S3 bucket.
+        
+        Args:
+            audio_files: List of audio file paths
+            
+        Returns:
+            Dictionary mapping job names to file info
+        """
         print("\n📤 Uploading files to S3...")
-        jobs = {}  # Maps job_name to file info
+        jobs = {}
         
         for audio_file_path in sorted(audio_files, key=self._natural_sort_key):
             filename = os.path.basename(audio_file_path)
@@ -268,7 +297,6 @@ class AmazonTranscribe(SpeechToTextProvider):
             s3_key = f"audio/{filename}"
             
             try:
-                # Upload to S3
                 print(f"  Uploading: {filename}")
                 self.s3_client.upload_file(audio_file_path, self.bucket_name, s3_key)
                 
@@ -279,8 +307,7 @@ class AmazonTranscribe(SpeechToTextProvider):
                     'status': 'uploaded'
                 }
                 
-                # Small delay to ensure unique timestamps
-                time.sleep(0.01)
+                time.sleep(0.01)  # Ensure unique timestamps
                 
             except Exception as e:
                 jobs[job_name] = {
@@ -291,12 +318,21 @@ class AmazonTranscribe(SpeechToTextProvider):
                     'error': str(e)
                 }
         
-        # Step 2: Start all transcription jobs
+        return jobs
+    
+    def _start_transcription_jobs(self, jobs: Dict) -> None:
+        """
+        Start AWS Transcribe jobs for all uploaded files.
+        
+        Args:
+            jobs: Dictionary mapping job names to file info (modified in place)
+        """
         print("\n🚀 Starting transcription jobs...")
+        
         for job_name, job_info in jobs.items():
             if job_info['status'] != 'uploaded':
                 continue
-                
+            
             try:
                 filename = job_info['filename']
                 s3_key = job_info['s3_key']
@@ -316,21 +352,25 @@ class AmazonTranscribe(SpeechToTextProvider):
                 jobs[job_name]['status'] = 'submit_failed'
                 jobs[job_name]['error'] = str(e)
                 print(f"  Failed to start: {filename} - {e}")
+    
+    def _wait_for_jobs_completion(self, jobs: Dict) -> None:
+        """
+        Poll AWS Transcribe jobs until all are completed or failed.
         
-        # Step 3: Wait for all jobs to complete
+        Args:
+            jobs: Dictionary mapping job names to file info (modified in place)
+        """
         print("\n⏳ Waiting for all transcriptions to complete...")
-        submitted_jobs = {k: v for k, v in jobs.items() if v['status'] == 'submitted'}
         
-        max_wait_time = 600  # 10 minutes for batch
+        submitted_jobs = {k: v for k, v in jobs.items() if v['status'] == 'submitted'}
+        max_wait_time = 600  # 10 minutes
         start_time = time.time()
         poll_interval = 5
-        
         completed_count = 0
         total_jobs = len(submitted_jobs)
         
         while submitted_jobs:
-            elapsed = time.time() - start_time
-            if elapsed > max_wait_time:
+            if time.time() - start_time > max_wait_time:
                 print(f"  ⚠️  Timeout reached, {len(submitted_jobs)} jobs still pending")
                 break
             
@@ -342,12 +382,11 @@ class AmazonTranscribe(SpeechToTextProvider):
                         TranscriptionJobName=job_name
                     )
                     
-                    # Verify response matches requested job (safety check)
+                    # Verify response matches requested job
                     response_job_name = response['TranscriptionJob']['TranscriptionJobName']
                     if response_job_name != job_name:
                         raise ValueError(
-                            f"Job name mismatch: requested '{job_name}', "
-                            f"got '{response_job_name}'"
+                            f"Job name mismatch: requested '{job_name}', got '{response_job_name}'"
                         )
                     
                     status = response['TranscriptionJob']['TranscriptionJobStatus']
@@ -365,116 +404,168 @@ class AmazonTranscribe(SpeechToTextProvider):
                     jobs[job_name]['error'] = str(e)
                     jobs_to_remove.append(job_name)
             
-            # Remove completed jobs from pending list
             for job_name in jobs_to_remove:
                 del submitted_jobs[job_name]
             
             if submitted_jobs:
                 time.sleep(poll_interval)
+    
+    def _process_results_and_cleanup(self, jobs: Dict) -> List[Dict[str, str]]:
+        """
+        Process transcription results and cleanup S3 files.
         
-        # Step 4: Process results and cleanup
+        Args:
+            jobs: Dictionary mapping job names to file info
+            
+        Returns:
+            List of transcription results
+        """
+        import json
+        import urllib.request
+        import ssl
+        
         print("\n📥 Processing results...")
         results = []
+        s3_keys_to_delete = []
         
         # Create SSL context for downloading transcripts
         ssl_context = ssl.create_default_context()
         ssl_context.check_hostname = False
         ssl_context.verify_mode = ssl.CERT_NONE
         
-        # Collect all S3 keys for batch deletion
-        s3_keys_to_delete = []
-        
         for job_name, job_info in jobs.items():
             filename = job_info['filename']
             s3_key = job_info['s3_key']
-            
-            # Add to deletion list
             s3_keys_to_delete.append({'Key': s3_key})
             
-            try:
-                if job_info['status'] == 'completed':
-                    response = job_info['response']
-                    job_data = response['TranscriptionJob']
-                    
-                    # Get timing information
-                    creation_time = job_data.get('CreationTime')
-                    completion_time = job_data.get('CompletionTime')
-                    aws_duration = None
-                    
-                    if creation_time and completion_time:
-                        aws_duration = (completion_time - creation_time).total_seconds()
-                    
-                    # Download transcript
-                    transcript_uri = job_data['Transcript']['TranscriptFileUri']
-                    
-                    with urllib.request.urlopen(transcript_uri, context=ssl_context) as resp:
-                        transcript_data = json.loads(resp.read())
-                    
-                    text = transcript_data['results']['transcripts'][0]['transcript']
-                    
-                    result = {
-                        "filename": filename,
-                        "text": text,
-                        "status": "success",
-                        "transcription_time": f"{aws_duration:.2f}" if aws_duration else ""
-                    }
-                    
-                elif job_info['status'] == 'failed':
-                    response = job_info['response']
-                    failure_reason = response['TranscriptionJob'].get('FailureReason', 'Unknown')
-                    
-                    result = {
-                        "filename": filename,
-                        "text": "",
-                        "status": f"failed: {failure_reason}",
-                        "transcription_time": ""
-                    }
-                    
-                else:
-                    # Upload failed, submit failed, or other error
-                    error_msg = job_info.get('error', job_info['status'])
-                    result = {
-                        "filename": filename,
-                        "text": "",
-                        "status": f"error: {error_msg}",
-                        "transcription_time": ""
-                    }
-                    
-            except Exception as e:
-                result = {
-                    "filename": filename,
-                    "text": "",
-                    "status": f"exception: {str(e)}",
-                    "transcription_time": ""
-                }
+            result = self._process_single_job_result(job_info, job_name, ssl_context)
             
-            # Add provider name and extract metadata from filename (consistent with base class)
+            # Add provider name and metadata
             result['provider'] = self.provider_name
-            
-            # Extract metadata from filename: {person}_{audio}_{noise}_{snr}
-            filename_stem = Path(filename).stem
-            parts = filename_stem.split('_')
-            
-            if len(parts) > 0: result['person'] = parts[0]
-            if len(parts) > 1: result['audio'] = parts[1]
-            if len(parts) > 2: result['noise'] = parts[2]
-            if len(parts) > 3: result['snr'] = parts[3]
+            self._add_filename_metadata(result, filename)
             
             results.append(result)
         
-        # Batch delete all S3 files at once (up to 1000 objects per call)
-        if s3_keys_to_delete:
-            print(f"\n🗑️  Deleting {len(s3_keys_to_delete)} files from S3...")
-            try:
-                # S3 delete_objects can handle up to 1000 objects per call
-                for i in range(0, len(s3_keys_to_delete), 1000):
-                    batch = s3_keys_to_delete[i:i+1000]
-                    self.s3_client.delete_objects(
-                        Bucket=self.bucket_name,
-                        Delete={'Objects': batch}
-                    )
-                print(f"✓ Cleanup complete")
-            except Exception as e:
-                print(f"⚠️  Warning: S3 cleanup failed: {e}")
+        # Batch delete all S3 files
+        self._cleanup_s3_files(s3_keys_to_delete)
         
         return results
+    
+    def _process_single_job_result(self, job_info: Dict, job_name: str, ssl_context) -> Dict[str, str]:
+        """
+        Process result for a single transcription job.
+        
+        Args:
+            job_info: Job information dictionary
+            job_name: AWS Transcribe job name
+            ssl_context: SSL context for downloading transcripts
+            
+        Returns:
+            Result dictionary with filename, text, status, and transcription_time
+        """
+        import json
+        import urllib.request
+        
+        filename = job_info['filename']
+        
+        try:
+            if job_info['status'] == 'completed':
+                response = job_info['response']
+                job_data = response['TranscriptionJob']
+                
+                # Get timing information
+                creation_time = job_data.get('CreationTime')
+                completion_time = job_data.get('CompletionTime')
+                aws_duration = None
+                
+                if creation_time and completion_time:
+                    aws_duration = (completion_time - creation_time).total_seconds()
+                
+                # Download and parse transcript
+                transcript_uri = job_data['Transcript']['TranscriptFileUri']
+                with urllib.request.urlopen(transcript_uri, context=ssl_context) as resp:
+                    transcript_data = json.loads(resp.read())
+                
+                text = transcript_data['results']['transcripts'][0]['transcript']
+                
+                # Clean up job
+                self.transcribe_client.delete_transcription_job(TranscriptionJobName=job_name)
+                
+                return {
+                    "filename": filename,
+                    "text": text,
+                    "status": "success",
+                    "transcription_time": f"{aws_duration:.2f}" if aws_duration else ""
+                }
+                
+            elif job_info['status'] == 'failed':
+                response = job_info['response']
+                failure_reason = response['TranscriptionJob'].get('FailureReason', 'Unknown')
+                
+                # Clean up failed job
+                self.transcribe_client.delete_transcription_job(TranscriptionJobName=job_name)
+                
+                return {
+                    "filename": filename,
+                    "text": "",
+                    "status": f"failed: {failure_reason}",
+                    "transcription_time": ""
+                }
+            else:
+                # Upload failed, submit failed, or other error
+                error_msg = job_info.get('error', job_info['status'])
+                return {
+                    "filename": filename,
+                    "text": "",
+                    "status": f"error: {error_msg}",
+                    "transcription_time": ""
+                }
+                
+        except Exception as e:
+            return {
+                "filename": filename,
+                "text": "",
+                "status": f"exception: {str(e)}",
+                "transcription_time": ""
+            }
+    
+    def _add_filename_metadata(self, result: Dict, filename: str) -> None:
+        """
+        Extract and add metadata from filename to result dictionary.
+        Expected format: {person}_{audio}_{noise}_{snr}.ext
+        
+        Args:
+            result: Result dictionary (modified in place)
+            filename: Audio filename
+        """
+        filename_stem = Path(filename).stem
+        parts = filename_stem.split('_')
+        
+        if len(parts) > 0: result['person'] = parts[0]
+        if len(parts) > 1: result['audio'] = parts[1]
+        if len(parts) > 2: result['noise'] = parts[2]
+        if len(parts) > 3: result['snr'] = parts[3]
+    
+    def _cleanup_s3_files(self, s3_keys_to_delete: List[Dict]) -> None:
+        """
+        Delete files from S3 bucket in batch.
+        
+        Args:
+            s3_keys_to_delete: List of S3 keys to delete
+        """
+        if not s3_keys_to_delete:
+            return
+        
+        print(f"\n🗑️  Deleting {len(s3_keys_to_delete)} files from S3...")
+        
+        try:
+            # S3 delete_objects can handle up to 1000 objects per call
+            for i in range(0, len(s3_keys_to_delete), 1000):
+                batch = s3_keys_to_delete[i:i+1000]
+                self.s3_client.delete_objects(
+                    Bucket=self.bucket_name,
+                    Delete={'Objects': batch}
+                )
+            print(f"✓ Cleanup complete")
+        except Exception as e:
+            print(f"⚠️  Warning: S3 cleanup failed: {e}")
