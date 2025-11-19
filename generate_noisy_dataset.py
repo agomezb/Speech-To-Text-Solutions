@@ -134,7 +134,6 @@ def generate_dataset(
                 typer.echo(f"  ✓ Generated: {output_name} ({processed + clean_files}/{total_files})")
     
     # Write metadata to CSV
-    # Write metadata to CSV
     if generate_report:
         csv_path = output_dir / "dataset_metadata.csv"
         with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
@@ -148,7 +147,6 @@ def generate_dataset(
     typer.echo(f"\n✅ Dataset generation complete!")
     typer.echo(f"   - Clean files: {clean_files}")
     typer.echo(f"   - Noisy files: {processed}")
-    typer.echo(f"   - Metadata saved to: {csv_path}")
     typer.echo(f"   - Total: {processed + clean_files} files in {output_dir}")
 
 

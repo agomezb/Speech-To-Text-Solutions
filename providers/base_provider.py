@@ -84,7 +84,12 @@ class SpeechToTextProvider(ABC):
         
         # Transcribe all files (sorted naturally by filename)
         results = []
-        for audio_file in sorted(audio_files, key=self._natural_sort_key):
+        total_files = len(audio_files)
+        
+        for i, audio_file in enumerate(sorted(audio_files, key=self._natural_sort_key), 1):
+            filename = Path(audio_file).name
+            print(f"Processing {i} of {total_files}: {filename}")
+            
             result = self.transcribe_file(audio_file)
             # Add provider name to result
             result['provider'] = self.provider_name
