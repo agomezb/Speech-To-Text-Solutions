@@ -54,7 +54,8 @@ def generate_dataset(
     voice_dir: Path = typer.Option(Path("./audio"), help="Directory containing clean voice recordings"),
     noise_dir: Path = typer.Option(Path("./noise"), help="Directory containing noise files"),
     output_dir: Path = typer.Option(Path("./audio_noise"), help="Output directory for noisy audio files"),
-    snr_levels: list[int] = typer.Option([10, 5, 0], help="SNR levels in dB")
+    snr_levels: list[int] = typer.Option([10, 5, 0], help="SNR levels in dB"),
+    generate_report: bool = typer.Option(False, help="Generate dataset_metadata.csv report")
 ):
     """Generate noisy audio dataset by mixing voice and noise files."""
     
@@ -133,11 +134,16 @@ def generate_dataset(
                 typer.echo(f"  ✓ Generated: {output_name} ({processed + clean_files}/{total_files})")
     
     # Write metadata to CSV
-    csv_path = output_dir / "dataset_metadata.csv"
-    with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["filename", "noise", "snr_level"])
-        writer.writerows(metadata)
+    # Write metadata to CSV
+    if generate_report:
+        csv_path = output_dir / "dataset_metadata.csv"
+        with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
+            writer = csv.writer(f)
+            writer.writerow(["filename", "noise", "snr_level"])
+            writer.writerows(metadata)
+        typer.echo(f"   - Metadata saved to: {csv_path}")
+    else:
+        typer.echo("   - Metadata report generation skipped")
     
     typer.echo(f"\n✅ Dataset generation complete!")
     typer.echo(f"   - Clean files: {clean_files}")
