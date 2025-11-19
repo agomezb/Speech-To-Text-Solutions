@@ -88,6 +88,18 @@ class SpeechToTextProvider(ABC):
             result = self.transcribe_file(audio_file)
             # Add provider name to result
             result['provider'] = self.provider_name
+            
+            # Extract metadata from filename
+            # Format: {person}_{audio-number}_{noise-type}_{snr-level}
+            filename = Path(audio_file).stem
+            parts = filename.split('_')
+            
+            # Flexible extraction: map available parts to fields in order
+            if len(parts) > 0: result['person'] = parts[0]
+            if len(parts) > 1: result['audio'] = parts[1]
+            if len(parts) > 2: result['noise'] = parts[2]
+            if len(parts) > 3: result['snr'] = parts[3]
+            
             results.append(result)
         
         # Check if we're appending or creating new file
@@ -120,7 +132,7 @@ class SpeechToTextProvider(ABC):
             all_keys.update(result.keys())
         
         # Standard fields first (provider added as first column after filename)
-        standard_fields = ['filename', 'provider', 'text', 'status', 'transcription_time']
+        standard_fields = ['filename', 'person', 'audio', 'noise', 'snr', 'provider', 'text', 'status', 'transcription_time']
         fieldnames = [f for f in standard_fields if f in all_keys]
         
         # Add any additional fields
