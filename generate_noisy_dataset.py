@@ -7,6 +7,7 @@ import os
 import random
 from pathlib import Path
 from pydub import AudioSegment
+import csv
 import typer
 
 
@@ -87,6 +88,9 @@ def generate_dataset(
     processed = 0
     clean_files = 0
     
+    # Metadata list to store CSV records
+    metadata = []
+    
     # Process each voice file
     for voice_file in voice_files:
         typer.echo(f"\nProcessing voice file: {voice_file.name}")
@@ -97,6 +101,10 @@ def generate_dataset(
         clean_output_path = output_dir / f"{voice_file.stem}_clean.wav"
         clean_voice.export(clean_output_path, format="wav")
         clean_files += 1
+        
+        # Add clean file metadata
+        metadata.append([clean_output_path.name, "", ""])
+        
         typer.echo(f"  ✓ Exported clean version: {voice_file.stem}_clean.wav")
         
         # Mix with each noise file (using preloaded noise from memory)
@@ -118,11 +126,23 @@ def generate_dataset(
                 mixed = mix_audio_at_snr(voice, noise_segment, snr)
                 mixed.export(output_path, format="wav")
                 processed += 1
+                
+                # Add noisy file metadata
+                metadata.append([output_name, noise_file.stem, snr])
+                
                 typer.echo(f"  ✓ Generated: {output_name} ({processed + clean_files}/{total_files})")
+    
+    # Write metadata to CSV
+    csv_path = output_dir / "dataset_metadata.csv"
+    with open(csv_path, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["filename", "noise", "snr_level"])
+        writer.writerows(metadata)
     
     typer.echo(f"\n✅ Dataset generation complete!")
     typer.echo(f"   - Clean files: {clean_files}")
     typer.echo(f"   - Noisy files: {processed}")
+    typer.echo(f"   - Metadata saved to: {csv_path}")
     typer.echo(f"   - Total: {processed + clean_files} files in {output_dir}")
 
 

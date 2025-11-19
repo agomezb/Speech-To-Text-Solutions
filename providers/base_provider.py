@@ -7,6 +7,7 @@ from typing import Dict, List
 from pathlib import Path
 import csv
 import os
+import re
 
 
 class SpeechToTextProvider(ABC):
@@ -15,6 +16,27 @@ class SpeechToTextProvider(ABC):
     def __init__(self):
         """Initialize base provider with a provider name."""
         self.provider_name = "unknown"
+    
+    @staticmethod
+    def _natural_sort_key(path: str) -> List:
+        """
+        Generate a sort key for natural/numeric sorting.
+        Converts '10' to integer 10 instead of string '10'.
+        
+        Example:
+            'p1_2.wav' -> ['p', 1, '_', 2, '.wav']
+            'p1_10.wav' -> ['p', 1, '_', 10, '.wav']
+        
+        Args:
+            path: File path string
+            
+        Returns:
+            List of strings and integers for natural sorting
+        """
+        def convert(text):
+            return int(text) if text.isdigit() else text.lower()
+        
+        return [convert(c) for c in re.split('([0-9]+)', path)]
     
     @abstractmethod
     def transcribe_file(self, audio_file_path: str) -> Dict[str, str]:
@@ -60,9 +82,9 @@ class SpeechToTextProvider(ABC):
         
         print(f"Found {len(audio_files)} audio files")
         
-        # Transcribe all files
+        # Transcribe all files (sorted naturally by filename)
         results = []
-        for audio_file in sorted(audio_files):
+        for audio_file in sorted(audio_files, key=self._natural_sort_key):
             result = self.transcribe_file(audio_file)
             # Add provider name to result
             result['provider'] = self.provider_name
