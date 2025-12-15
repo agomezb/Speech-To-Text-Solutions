@@ -53,7 +53,7 @@ class AzureSpeechToText(SpeechToTextProvider):
         # Segmentation silence timeout: 500ms default, adjust if needed
         self.speech_config.set_property(
             speechsdk.PropertyId.Speech_SegmentationSilenceTimeoutMs, 
-            "500"
+            "1000"
         )
     
     def transcribe_file(self, audio_file_path: str) -> Dict[str, str]:
